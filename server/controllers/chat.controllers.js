@@ -3,6 +3,9 @@ import { createRequire } from 'module';
 import { PDFParse } from 'pdf-parse';
 import axios from "axios";
 import dotenv from "dotenv";
+import Product from "../models/Product.js";
+import UserInteraction from "../models/UserInteraction.js";
+import CatalogUpload from "../models/CatalogUpload.js";
 
 dotenv.config();
 
@@ -21,6 +24,293 @@ const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 let pdf = "";
 let productCatalog = [];
+
+// Helper function to parse products from extracted PDF text using multiple strategies
+const parseProductsFromText = async (text) => {
+  console.log('Starting product extraction from text...');
+  let products = [];
+  
+  // Strategy 1: Try regex-based parsing for structured formats
+  products = parseProductsWithRegex(text);
+  
+  if (products.length > 0) {
+    console.log(`Regex parsing found ${products.length} products`);
+    return products;
+  }
+  
+  // Strategy 2: Try LLM-based extraction for unstructured text
+  try {
+    console.log('Regex parsing found no products, trying LLM extraction...');
+    products = await parseProductsWithLLM(text);
+    if (products.length > 0) {
+      console.log(`LLM extraction found ${products.length} products`);
+      return products;
+    }
+  } catch (err) {
+    console.warn('LLM extraction failed:', err.message);
+  }
+  
+  // Strategy 3: Try line-by-line heuristic parsing
+  products = parseProductsHeuristic(text);
+  console.log(`Heuristic parsing found ${products.length} products`);
+  
+  return products;
+};
+
+// Strategy 1: Regex-based parsing for structured formats
+const parseProductsWithRegex = (text) => {
+  const products = [];
+  let idCounter = 1;
+  
+  // Pattern 1: Product Name - Category - $Price - Description
+  const pattern1 = /^(.+?)\s*[-–]\s*(.+?)\s*[-–]\s*\$(\d+(?:\.\d{2})?)\s*[-–]\s*(.+?)$/gm;
+  
+  // Pattern 2: Product: Name | Category | Price: $XX.XX | Description
+  const pattern2 = /Product:\s*(.+?)\s*\|\s*(.+?)\s*\|\s*Price:\s*\$(\d+(?:\.\d{2})?)\s*\|\s*(.+?)$/gim;
+  
+  // Pattern 3: Name, Category, $Price, Description (CSV-like)
+  const pattern3 = /^["']?([^,\n]+?)["']?,\s*["']?([^,\n]+?)["']?,\s*\$?(\d+(?:\.\d{2})?),\s*["']?(.+?)["']?$/gm;
+  
+  // Pattern 4: JSON-like format
+  const pattern4 = /"name":\s*"([^"]+)"[^}]*"category":\s*"([^"]+)"[^}]*"price":\s*(\d+(?:\.\d{2})?)[^}]*"description":\s*"([^"]+)"/gi;
+  
+  const patterns = [pattern1, pattern2, pattern3, pattern4];
+  
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const [, title, category, price, description] = match;
+      
+      if (title && category && price && description) {
+        products.push({
+          title: title.trim(),
+          category: category.trim(),
+          price: parseFloat(price),
+          description: description.trim(),
+          tags: extractTags(description.trim() + ' ' + category.trim()),
+          sku: `SKU-${Date.now()}-${idCounter++}`,
+          stock: Math.floor(Math.random() * 100) + 1
+        });
+      }
+    }
+    
+    if (products.length > 0) break; // Stop if we found products with this pattern
+  }
+  
+  return products;
+};
+
+// Strategy 2: LLM-based extraction for unstructured text
+const parseProductsWithLLM = async (text) => {
+  const prompt = `Extract all products from the following catalog text. Return ONLY a valid JSON array of products with this exact structure:
+[
+  {
+    "title": "Product Name",
+    "category": "Category Name", 
+    "price": 99.99,
+    "description": "Product description"
+  }
+]
+
+Rules:
+- Extract ALL products mentioned in the text
+- Price must be a number (no $ symbol)
+- Keep descriptions concise (under 200 chars)
+- If category is unclear, infer from context
+- Return ONLY the JSON array, no other text
+
+Catalog text:
+${text.substring(0, 8000)}`;
+
+  try {
+    const response = await axios.post(
+      OPENROUTER_API_URL,
+      {
+        model: "openai/gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are a product catalog parser. Return only valid JSON arrays." },
+          { role: "user", content: prompt }
+        ],
+        max_tokens: 2000,
+        temperature: 0.1
+      },
+      {
+        headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}` },
+        timeout: 30000
+      }
+    );
+    
+    const content = response.data.choices[0]?.message?.content || '[]';
+    
+    // Extract JSON from response (handle markdown code blocks)
+    let jsonStr = content.trim();
+    if (jsonStr.startsWith('```')) {
+      jsonStr = jsonStr.replace(/```json?\n?/g, '').replace(/```$/g, '').trim();
+    }
+    
+    const parsedProducts = JSON.parse(jsonStr);
+    
+    // Validate and add additional fields
+    return parsedProducts.map((p, i) => ({
+      title: p.title || 'Unknown Product',
+      category: p.category || 'General',
+      price: parseFloat(p.price) || 0,
+      description: p.description || '',
+      tags: extractTags((p.description || '') + ' ' + (p.category || '')),
+      sku: `SKU-${Date.now()}-${i + 1}`,
+      stock: Math.floor(Math.random() * 100) + 1
+    })).filter(p => p.title && p.price > 0);
+    
+  } catch (err) {
+    console.error('LLM extraction error:', err.message);
+    return [];
+  }
+};
+
+// Strategy 3: Heuristic line-by-line parsing
+const parseProductsHeuristic = (text) => {
+  const products = [];
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 10);
+  
+  let currentProduct = null;
+  let idCounter = 1;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Look for price indicators
+    const priceMatch = line.match(/\$\s*(\d+(?:\.\d{2})?)/);
+    
+    if (priceMatch) {
+      const price = parseFloat(priceMatch[1]);
+      
+      // Try to find product name (usually before or on same line as price)
+      const titleMatch = line.replace(/\$\s*\d+(?:\.\d{2})?/, '').trim();
+      
+      if (titleMatch.length > 3) {
+        // Look ahead for description
+        const description = lines[i + 1] || titleMatch;
+        
+        // Try to infer category from keywords
+        const category = inferCategory(titleMatch + ' ' + description);
+        
+        currentProduct = {
+          title: titleMatch.substring(0, 100),
+          category: category,
+          price: price,
+          description: description.substring(0, 200),
+          tags: extractTags(titleMatch + ' ' + description),
+          sku: `SKU-${Date.now()}-${idCounter++}`,
+          stock: Math.floor(Math.random() * 100) + 1
+        };
+        
+        products.push(currentProduct);
+      }
+    }
+  }
+  
+  return products;
+};
+
+// Infer category from text
+const inferCategory = (text) => {
+  const lower = text.toLowerCase();
+  
+  const categories = {
+    'footwear': ['shoe', 'boot', 'sneaker', 'sandal', 'slipper', 'footwear'],
+    'clothing': ['shirt', 'pant', 'jacket', 'dress', 'skirt', 'clothing', 'apparel', 'wear'],
+    'electronics': ['phone', 'laptop', 'computer', 'tablet', 'camera', 'electronic'],
+    'sports': ['sport', 'fitness', 'running', 'gym', 'exercise', 'athletic'],
+    'accessories': ['bag', 'watch', 'jewelry', 'accessory', 'belt', 'hat'],
+    'home': ['furniture', 'decor', 'kitchen', 'bedding', 'home'],
+    'beauty': ['cosmetic', 'makeup', 'skincare', 'beauty', 'perfume'],
+    'books': ['book', 'novel', 'textbook', 'magazine', 'publication']
+  };
+  
+  for (const [category, keywords] of Object.entries(categories)) {
+    if (keywords.some(kw => lower.includes(kw))) {
+      return category;
+    }
+  }
+  
+  return 'general';
+};
+
+// Deduplicate products based on title similarity
+const deduplicateProducts = (products) => {
+  const uniqueProducts = [];
+  const seenTitles = new Set();
+  
+  for (const product of products) {
+    const normalizedTitle = product.title.toLowerCase().trim().replace(/\s+/g, ' ');
+    
+    // Check for exact match
+    if (!seenTitles.has(normalizedTitle)) {
+      // Check for very similar titles (fuzzy match)
+      const isSimilar = Array.from(seenTitles).some(existingTitle => {
+        return calculateSimilarity(normalizedTitle, existingTitle) > 0.85;
+      });
+      
+      if (!isSimilar) {
+        seenTitles.add(normalizedTitle);
+        uniqueProducts.push(product);
+      }
+    }
+  }
+  
+  return uniqueProducts;
+};
+
+// Calculate string similarity (Levenshtein distance based)
+const calculateSimilarity = (str1, str2) => {
+  const longer = str1.length > str2.length ? str1 : str2;
+  const shorter = str1.length > str2.length ? str2 : str1;
+  
+  if (longer.length === 0) return 1.0;
+  
+  const editDistance = levenshteinDistance(longer, shorter);
+  return (longer.length - editDistance) / longer.length;
+};
+
+// Levenshtein distance implementation
+const levenshteinDistance = (str1, str2) => {
+  const matrix = [];
+  
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+  
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  
+  return matrix[str2.length][str1.length];
+};
+
+// Extract tags from description text
+const extractTags = (text) => {
+  if (!text) return [];
+  const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'this', 'that', 'from', 'have', 'has', 'will', 'been']);
+  const words = text.toLowerCase().match(/\b\w+\b/g) || [];
+  const tags = words
+    .filter(w => w.length > 3 && !commonWords.has(w))
+    .slice(0, 8);
+  return [...new Set(tags)];
+};
 
 // Same multi-strategy PDF parsing helper used in routes
 const tryMultiplePdfParsers = async (pdfBuffer) => {
@@ -126,7 +416,96 @@ export const pdfUpload = (req, res) => {
       }
 
       pdf = extractedText;
-      res.json({ message: "PDF uploaded and text extracted successfully.", textLength: extractedText.length, preview: extractedText.substring(0, 200) + (extractedText.length > 200 ? "..." : "") });
+
+      // Save catalog upload to database
+      const catalogUpload = new CatalogUpload({
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        extractedText: extractedText,
+        textLength: extractedText.length,
+        sessionId: req.headers['x-session-id'] || 'default-session',
+        userId: req.headers['x-user-id'] || 'anonymous',
+        status: 'uploaded'
+      });
+      
+      await catalogUpload.save();
+
+      // Try to parse and extract products from the text
+      let extractedProducts = [];
+      let insertedCount = 0;
+      let duplicateCount = 0;
+      
+      try {
+        console.log('Starting product extraction...');
+        extractedProducts = await parseProductsFromText(extractedText);
+        console.log(`Extracted ${extractedProducts.length} products from text`);
+        
+        if (extractedProducts.length > 0) {
+          // Remove duplicates based on title similarity
+          const uniqueProducts = deduplicateProducts(extractedProducts);
+          console.log(`After deduplication: ${uniqueProducts.length} unique products`);
+          
+          // Insert products one by one to handle duplicates gracefully
+          for (const product of uniqueProducts) {
+            try {
+              const newProduct = new Product(product);
+              await newProduct.save();
+              insertedCount++;
+              
+              // Add to in-memory catalog
+              productCatalog.push({
+                id: newProduct._id.toString(),
+                title: newProduct.title,
+                category: newProduct.category,
+                price: newProduct.price,
+                description: newProduct.description,
+                tags: newProduct.tags || []
+              });
+            } catch (insertErr) {
+              if (insertErr.code === 11000) {
+                // Duplicate SKU
+                duplicateCount++;
+                console.log(`Duplicate product skipped: ${product.title}`);
+              } else {
+                console.warn(`Failed to insert product "${product.title}":`, insertErr.message);
+              }
+            }
+          }
+          
+          catalogUpload.productsExtracted = insertedCount;
+          catalogUpload.status = insertedCount > 0 ? 'processed' : 'uploaded';
+          catalogUpload.metadata = {
+            totalExtracted: extractedProducts.length,
+            uniqueProducts: uniqueProducts.length,
+            insertedCount: insertedCount,
+            duplicateCount: duplicateCount
+          };
+          await catalogUpload.save();
+          
+          console.log(`Successfully inserted ${insertedCount} products to database`);
+        } else {
+          console.log('No products found in PDF text');
+          catalogUpload.status = 'uploaded';
+          catalogUpload.metadata = { note: 'No products could be extracted from the text' };
+          await catalogUpload.save();
+        }
+      } catch (parseErr) {
+        console.error('Product parsing/insertion error:', parseErr);
+        catalogUpload.status = 'failed';
+        catalogUpload.metadata = { error: parseErr.message };
+        await catalogUpload.save();
+      }
+
+      res.json({ 
+        message: "PDF uploaded and text extracted successfully.", 
+        textLength: extractedText.length, 
+        preview: extractedText.substring(0, 200) + (extractedText.length > 200 ? "..." : ""),
+        catalogId: catalogUpload._id,
+        productsExtracted: insertedCount,
+        totalFound: extractedProducts.length,
+        duplicatesSkipped: duplicateCount,
+        status: catalogUpload.status
+      });
     } catch (parseErr) {
       console.error("PDF parsing error:", parseErr);
       let errorMessage = "Failed to parse PDF: ";
@@ -194,7 +573,28 @@ export const ask = async (req, res) => {
     console.log(answer)
     if (!answer || answer.trim().length === 0) return res.status(500).json({ error: "AI service returned an empty response. Please try again." });
 
-    res.json({ answer   , contextLength: context.length, queryLength: query.length });
+    // Save user interaction to database
+    const interaction = new UserInteraction({
+      sessionId: req.headers['x-session-id'] || 'default-session',
+      userId: req.headers['x-user-id'] || 'anonymous',
+      interactionType: 'query',
+      query: query,
+      aiResponse: answer,
+      metadata: {
+        contextLength: context.length,
+        queryLength: query.length,
+        model: response.data.model
+      }
+    });
+    
+    await interaction.save();
+
+    res.json({ 
+      answer, 
+      contextLength: context.length, 
+      queryLength: query.length,
+      interactionId: interaction._id
+    });
   } catch (error) {
     console.error("Error querying AI service:", error.response?.data || error.message);
 
@@ -297,8 +697,27 @@ export const recommend = async (req, res) => {
     return res.status(400).json({ error: "Behavior object is required" });
   }
 
+  // Fetch products from database if catalog is empty
   if (!productCatalog || productCatalog.length === 0) {
-    return res.status(400).json({ error: "No product catalog available. Upload via /catalog" });
+    try {
+      const dbProducts = await Product.find().limit(100).lean();
+      if (dbProducts.length > 0) {
+        productCatalog = dbProducts.map(p => ({
+          id: p._id.toString(),
+          title: p.title,
+          description: p.description,
+          category: p.category,
+          price: p.price,
+          tags: p.tags || []
+        }));
+      }
+    } catch (dbErr) {
+      console.error('Database product fetch error:', dbErr);
+    }
+  }
+
+  if (!productCatalog || productCatalog.length === 0) {
+    return res.status(400).json({ error: "No product catalog available. Upload via /catalog or add products to database" });
   }
 
   try {
@@ -374,9 +793,117 @@ export const recommend = async (req, res) => {
       return res.status(200).json({ recommendations: top, explanation: generic });
     }
 
-    res.json({ recommendations: top, explanation });
+    // Save recommendation interaction to database
+    const interaction = new UserInteraction({
+      sessionId: req.headers['x-session-id'] || 'default-session',
+      userId: req.headers['x-user-id'] || 'anonymous',
+      interactionType: 'recommendation_shown',
+      products: top.map(p => ({
+        productId: p.id,
+        productTitle: p.title,
+        relevanceScore: p.score
+      })),
+      aiResponse: explanation,
+      metadata: { behavior }
+    });
+    
+    await interaction.save();
+
+    res.json({ 
+      recommendations: top, 
+      explanation,
+      interactionId: interaction._id
+    });
   } catch (err) {
     console.error("Recommendation error", err);
     res.status(500).json({ error: "Failed to generate recommendations", details: err.message });
+  }
+};
+
+// Get all products from database
+export const getProducts = async (req, res) => {
+  try {
+    const { category, minPrice, maxPrice, search, limit = 50, skip = 0 } = req.query;
+    
+    const query = {};
+    if (category) query.category = category;
+    if (minPrice || maxPrice) {
+      query.price = {};
+      if (minPrice) query.price.$gte = parseFloat(minPrice);
+      if (maxPrice) query.price.$lte = parseFloat(maxPrice);
+    }
+    if (search) {
+      query.$text = { $search: search };
+    }
+    
+    const products = await Product.find(query)
+      .limit(parseInt(limit))
+      .skip(parseInt(skip))
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    const total = await Product.countDocuments(query);
+    
+    res.json({ products, total, count: products.length });
+  } catch (err) {
+    console.error('Get products error:', err);
+    res.status(500).json({ error: 'Failed to fetch products', details: err.message });
+  }
+};
+
+// Get user interactions from database
+export const getUserInteractions = async (req, res) => {
+  try {
+    const { sessionId, userId, type, limit = 50, skip = 0 } = req.query;
+    
+    const query = {};
+    if (sessionId) query.sessionId = sessionId;
+    if (userId) query.userId = userId;
+    if (type) query.interactionType = type;
+    
+    const interactions = await UserInteraction.find(query)
+      .limit(parseInt(limit))
+      .skip(parseInt(skip))
+      .sort({ timestamp: -1 })
+      .populate('products.productId')
+      .lean();
+    
+    const total = await UserInteraction.countDocuments(query);
+    
+    res.json({ interactions, total, count: interactions.length });
+  } catch (err) {
+    console.error('Get interactions error:', err);
+    res.status(500).json({ error: 'Failed to fetch interactions', details: err.message });
+  }
+};
+
+// Create or update a product manually
+export const createProduct = async (req, res) => {
+  try {
+    const { title, description, category, price, tags, stock, sku } = req.body;
+    
+    if (!title || !description || !category || price === undefined) {
+      return res.status(400).json({ error: 'Missing required fields: title, description, category, price' });
+    }
+    
+    const product = new Product({
+      title,
+      description,
+      category,
+      price,
+      tags: tags || [],
+      stock: stock || 0,
+      sku: sku || `SKU-${Date.now()}`
+    });
+    
+    await product.save();
+    
+    res.status(201).json({ message: 'Product created successfully', product });
+  } catch (err) {
+    console.error('Create product error:', err);
+    if (err.code === 11000) {
+      return res.status(400).json({ error: 'Product with this SKU already exists' });
+    }
+    res.status(500).json({ error: 'Failed to create product', details: err.message });
   }
 };

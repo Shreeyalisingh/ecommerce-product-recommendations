@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { uploadPdf } from '../utils/api';
 
 export default function CatalogUploader({ onUploaded }) {
   const [file, setFile] = useState(null);
@@ -6,7 +7,7 @@ export default function CatalogUploader({ onUploaded }) {
   const [message, setMessage] = useState(null);
   const [preview, setPreview] = useState(null);
 
-  const uploadPdf = async () => {
+  const handleUpload = async () => {
     if (!file) {
       setMessage({ type: 'error', text: 'Please choose a PDF file first' });
       return;
@@ -14,18 +15,40 @@ export default function CatalogUploader({ onUploaded }) {
 
     setLoading(true);
     setMessage(null);
+    setPreview(null);
+    
     try {
-      const fd = new FormData();
-      fd.append('pdf', file, file.name);
-
-      const res = await fetch('http://localhost:8000/api/chat/pdf-upload', {
-        method: 'POST',
-        body: fd,
+      const data = await uploadPdf(file);
+      const extractionMsg = data.productsExtracted > 0
+        ? `Successfully extracted and saved ${data.productsExtracted} products to database!`
+        : data.totalFound > 0
+        ? `Found ${data.totalFound} products but could not save them (check for duplicates)`
+        : 'PDF uploaded but no products were found in the text';
+      
+      setMessage({ 
+        type: data.productsExtracted > 0 ? 'success' : 'error', 
+        text: extractionMsg
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Upload failed');
-      setMessage({ type: 'success', text: data.message || 'Uploaded' });
-      setPreview(data.preview || null);
+      
+      if (data.preview) {
+        setPreview(data.preview);
+      }
+      
+      // Show detailed stats if available
+      if (data.totalFound || data.duplicatesSkipped) {
+        const stats = [];
+        if (data.totalFound) stats.push(`${data.totalFound} found`);
+        if (data.productsExtracted) stats.push(`${data.productsExtracted} saved`);
+        if (data.duplicatesSkipped) stats.push(`${data.duplicatesSkipped} duplicates skipped`);
+        
+        if (stats.length > 0) {
+          setMessage(prev => ({
+            ...prev,
+            text: `${prev.text} (${stats.join(', ')})`
+          }));
+        }
+      }
+      
       onUploaded && onUploaded(data);
     } catch (err) {
       setMessage({ type: 'error', text: err.message });
@@ -47,7 +70,7 @@ export default function CatalogUploader({ onUploaded }) {
         </div>
 
         <div style={{ marginTop: 12 }}>
-          <button className="btn-primary" onClick={uploadPdf} disabled={loading}>{loading ? 'Uploading...' : 'Upload PDF'}</button>
+          <button className="btn-primary" onClick={handleUpload} disabled={loading}>{loading ? 'Uploading...' : 'Upload PDF'}</button>
         </div>
 
         {message && <div className={`msg ${message.type}`}>{message.text}</div>}

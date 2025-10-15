@@ -119,8 +119,12 @@
 .hero-sub { color: var(--muted); font-size:18px; margin:0 0 28px; }
 
 /* Pink CTA button variant */
-.btn-primary { background: linear-gradient(90deg,var(--accent),var(--accent-2)); color: white; padding: 12px 18px; border-radius: 10px; font-weight:700; box-shadow: 0 12px 30px rgba(255,111,153,0.15); }
+.btn-primary { background: linear-gradient(90deg,var(--accent),var(--accent-2)); color: white; padding: 12px 18px; border-radius: 10px; font-weight:700; box-shadow: 0 12px 30px rgba(255,111,153,0.15); border: none; cursor: pointer; }
 .btn-primary:hover { transform: translateY(-3px); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+.btn-ghost { background: transparent; border: 1px solid rgba(255,111,161,0.3); color: var(--text); padding: 12px 18px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+.btn-ghost:hover { background: rgba(255,111,161,0.05); }
 
 /* Ask card alert */
 .info-alert { background: linear-gradient(90deg, #fff4e6, #fff0d9); padding: 10px 14px; border-radius:8px; color:#b36b2b; border:1px solid #ffe8c8; }
