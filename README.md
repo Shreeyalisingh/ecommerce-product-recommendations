@@ -79,10 +79,12 @@ unthinkable/
 ### Backend
 - **Node.js** with **Express.js 5.1.0** - RESTful API server
 - **MongoDB** with **Mongoose 8.19.1** - NoSQL database with schemas
-- **Multer 1.4.5-lts.1** - Multipart/form-data file upload
+- **Multer 2.0.2** - Multipart/form-data file upload
 - **pdf-parse 2.2.6** - PDF text extraction
-- **Axios 2.0.0** - HTTP client for AI API calls
-- **CORS** - Cross-origin resource sharing
+- **Axios 1.12.2** - HTTP client for AI API calls
+- **CORS 2.8.5** - Cross-origin resource sharing
+- **dotenv 17.2.3** - Environment variable management
+- **Nodemon 3.1.10** - Development auto-restart
 
 ### AI & Machine Learning
 - **OpenRouter API** - Multi-model AI gateway
@@ -119,12 +121,14 @@ unthinkable/
 
 4. **Environment Configuration**
    
-   Create a `.env` file in the `server` directory:
+   Create a `.env` file in the `server` directory (or copy from `.env.example`):
    ```env
    PORT=8000
-   MONGODB_URI=mongodb://localhost:27017/recommendations
+   MONGODB=mongodb://localhost:27017/recommendations
    OPENROUTER_API_KEY=your_openrouter_api_key_here
    ```
+   
+   **Note**: A `.env.example` file is provided in the server directory as a template.
 
 ## 🚀 Running the Application
 
@@ -280,19 +284,19 @@ All formats are automatically detected and parsed!
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `PORT` | Server port number | No | 8000 |
-| `MONGODB_URI` | MongoDB connection string | Yes | - |
+| `MONGODB` | MongoDB connection string | Yes | - |
 | `OPENROUTER_API_KEY` | API key for OpenRouter LLM service | Yes | - |
 
 ### MongoDB Setup Options
 
 **Option 1: Local MongoDB**
 ```env
-MONGODB_URI=mongodb://localhost:27017/pawvaidya-recommendations
+MONGODB=mongodb://localhost:27017/recommendations
 ```
 
 **Option 2: MongoDB Atlas (Cloud)**
 ```env
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/pawvaidya-recommendations
+MONGODB=mongodb+srv://username:password@cluster.mongodb.net/recommendations
 ```
 
 ### Database Collections
@@ -340,8 +344,9 @@ This project is licensed under the ISC License.
 
 **MongoDB connection errors?**
 - ✅ Verify MongoDB is running: `mongod --version`
-- ✅ Check MONGODB_URI in `.env` file
+- ✅ Check `MONGODB` variable in `.env` file (not `MONGODB_URI`)
 - ✅ Ensure network access (for MongoDB Atlas)
+- ✅ For local setup: Start MongoDB service before running the server
 
 **CORS errors in browser?**
 - ✅ Configured for `http://localhost:5173` by default
@@ -374,14 +379,16 @@ We welcome contributions! Here's how you can help:
 6. **Open a Pull Request** with detailed description
 
 ### Areas for Contribution
-- �️ Image recognition for scanned PDFs
+- 🖼️ Image recognition for scanned PDFs (OCR integration)
 - 📊 Excel/CSV catalog upload support
-- 🌍 Multi-language support
-- 🎨 Additional UI themes
-- 📱 Mobile app version
-- 🔍 Advanced search with filters
-- 📈 Analytics dashboard
-- 🧪 Unit and integration tests
+- 🌍 Multi-language support for international products
+- 🎨 Additional UI themes (dark mode, accessibility)
+- 📱 Progressive Web App (PWA) or mobile app
+- 🔍 Advanced search with faceted filters
+- 📈 Analytics dashboard with charts
+- 🧪 Unit and integration tests (Jest, React Testing Library)
+- 🔐 User authentication and authorization
+- 🎯 A/B testing for recommendation algorithms
 
 ## 🚀 Future Enhancements
 
@@ -400,15 +407,12 @@ We welcome contributions! Here's how you can help:
 - [ ] Product image storage and display
 - [ ] Review and rating system
 
-## 📚 Documentation
+## 📚 Additional Documentation
 
-- **Product Extraction Guide**: See `server/PRODUCT_EXTRACTION_GUIDE.md` for detailed documentation on:
-  - Multi-strategy extraction algorithms
-  - Supported PDF formats and examples
-  - Category inference keywords
-  - Deduplication logic
-  - Performance metrics
-  - Testing guidelines
+For more detailed information about specific features:
+- Check the inline code comments in the controller files
+- Review the API endpoint documentation above
+- Explore the component files for frontend implementation details
 
 ## 📄 License
 
@@ -418,10 +422,10 @@ This project is licensed under the **ISC License**.
 
 Need help? Here's how to get support:
 
-- 📖 Check the [Product Extraction Guide](server/PRODUCT_EXTRACTION_GUIDE.md)
-- 🐛 [Open an issue](https://github.com/Shreeyalisingh/ecommerce-product-recommendations/issues) on GitHub
+-  [Open an issue](https://github.com/Shreeyalisingh/ecommerce-product-recommendations/issues) on GitHub
 - 💬 Start a discussion in the repository
 - 📧 Contact the maintainers
+- 📖 Check the project documentation and README
 
 ## 🙏 Acknowledgments
 
