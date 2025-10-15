@@ -414,28 +414,6 @@ For more detailed information about specific features:
 - Review the API endpoint documentation above
 - Explore the component files for frontend implementation details
 
-## 📄 License
-
-This project is licensed under the **ISC License**.
-
-## 📞 Support
-
-Need help? Here's how to get support:
-
--  [Open an issue](https://github.com/Shreeyalisingh/ecommerce-product-recommendations/issues) on GitHub
-- 💬 Start a discussion in the repository
-- 📧 Contact the maintainers
-- 📖 Check the project documentation and README
-
-## 🙏 Acknowledgments
-
-- **OpenRouter** - Multi-model AI API gateway
-- **Anthropic** - Claude 3.5 Sonnet model
-- **OpenAI** - GPT-4o-mini for text extraction
-- **Mistral AI** - Mistral 7B fallback model
-- **MongoDB** - Flexible NoSQL database
-- **React Team** - Amazing UI framework
-- **Vite** - Lightning-fast build tool
 
 ---
 
