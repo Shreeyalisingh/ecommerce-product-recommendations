@@ -30,7 +30,7 @@ export default function RecommendationList({ items = [], explanation }) {
   };
 
   return (
-    <div className="recommendation-list panel">
+    <>
       <div className="explanation panel">
         <h4>LLM Explanation</h4>
         <div 
@@ -38,13 +38,6 @@ export default function RecommendationList({ items = [], explanation }) {
           dangerouslySetInnerHTML={{ __html: parseMarkdown(explanation) }}
         />
       </div>
-      {items.length === 0 && (
-        <div className="empty-state">
-          <div className="empty-icon">🔍</div>
-          <p>No recommendations yet</p>
-          <small>Upload a catalog and submit preferences to see recommendations</small>
-        </div>
-      )}
       <ul>
         {items.map((it) => (
           <li key={it.id} className="rec-item">
@@ -55,6 +48,6 @@ export default function RecommendationList({ items = [], explanation }) {
           </li>
         ))}
       </ul>
-    </div>
+    </>
   );
 }

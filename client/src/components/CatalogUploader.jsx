@@ -35,19 +35,29 @@ export default function CatalogUploader({ onUploaded }) {
   };
 
   return (
-    <div className="catalog-uploader panel">
-      <h3>PDF Uploader</h3>
-      <input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-      <div>
-        <button onClick={uploadPdf} disabled={loading}>Upload PDF</button>
+    <div className="catalog-uploader upload-card">
+      <div className="upload-card-header">
+        <div className="upload-title">☁️ Upload catalog</div>
       </div>
-      {message && <div className={`msg ${message.type}`}>{message.text}</div>}
-      {preview && (
-        <div className="panel" style={{ marginTop: 8 }}>
-          <strong>Preview:</strong>
-          <pre style={{ whiteSpace: 'pre-wrap', maxHeight: 160, overflow: 'auto' }}>{preview}</pre>
+
+      <div className="upload-card-body">
+        <label className="field-label" style={{ marginTop: 12 }}>Choose File to Upload</label>
+        <div className="file-drop">
+          <input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         </div>
-      )}
+
+        <div style={{ marginTop: 12 }}>
+          <button className="btn-primary" onClick={uploadPdf} disabled={loading}>{loading ? 'Uploading...' : 'Upload PDF'}</button>
+        </div>
+
+        {message && <div className={`msg ${message.type}`}>{message.text}</div>}
+        {preview && (
+          <div className="panel preview-panel" style={{ marginTop: 12 }}>
+            <strong>Preview:</strong>
+            <pre style={{ whiteSpace: 'pre-wrap', maxHeight: 160, overflow: 'auto' }}>{preview}</pre>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

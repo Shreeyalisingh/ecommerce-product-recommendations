@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 export default function RecommendForm({ onResults }) {
-  const [queryText, setQueryText] = useState('Given the uploaded product catalog, suggest 3 products for a user who likes running and prefers footwear under $100.');
+  const [queryText, setQueryText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -21,9 +21,7 @@ export default function RecommendForm({ onResults }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Request failed');
-      // The /ask endpoint returns { answer, ... }
       onResults && onResults([], data.answer || '');
-      console.log(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -31,17 +29,21 @@ export default function RecommendForm({ onResults }) {
     }
   };
 
-  
-
-
-
   return (
-    <div className="recommend-form panel">
-      <h3>Ask (text recommendation)</h3>
-      <textarea value={queryText} onChange={(e) => setQueryText(e.target.value)} rows={4} />
-      <div>
-        <button onClick={requestRecommendations} disabled={loading}>Ask</button>
-        {error && <div className="msg error">{error}</div>}
+    <div className="recommend-form upload-card ask-card">
+      <div className="upload-card-header">
+        <div className="upload-title">❓ Ask Questions</div>
+      </div>
+      <div className="upload-card-body">
+        <div className="info-alert">Please upload a PDF document first before asking questions.</div>
+
+        <label className="field-label" style={{ marginTop: 18 }}>Your Question</label>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input className="text-input" placeholder="Ask a question about your PDF…" value={queryText} onChange={(e) => setQueryText(e.target.value)} />
+          <button className="btn-primary" onClick={requestRecommendations} disabled={loading}>{loading ? 'Asking…' : 'Ask'}</button>
+        </div>
+
+        {error && <div className="msg error" style={{ marginTop: 12 }}>{error}</div>}
       </div>
     </div>
   );

@@ -11,7 +11,7 @@ export default function RecommendationDashboard() {
 
   return (
     <div className="dashboard">
-      <section className="left">
+      <div style={{ maxWidth: 1700, margin: '0 auto' }}>
         <CatalogUploader onUploaded={(msg) => setCatalogStatus(msg)} />
         <RecommendForm
           onResults={(recs, exp) => {
@@ -19,11 +19,11 @@ export default function RecommendationDashboard() {
             setExplanation(exp || '');
           }}
         />
-      </section>
-      <section className="right">
-        <h2>Recommendations</h2>
-        <RecommendationList items={recommendations} explanation={explanation}  />
-      </section>
+
+        <div style={{ marginTop: 20 }}>
+          <RecommendationList items={recommendations} explanation={explanation} />
+        </div>
+      </div>
     </div>
   );
 }
