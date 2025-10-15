@@ -1,4 +1,4 @@
-# PawVaidya - AI-Powered E-Commerce Recommendation System
+# AI-Powered E-Commerce Recommendation System
 
 A full-stack web application that provides intelligent product recommendations based on uploaded product catalogs and user behavior data. The system features **advanced multi-strategy product extraction** from PDF catalogs, **MongoDB persistence**, and **AI-powered recommendations** using multiple LLM models.
 
